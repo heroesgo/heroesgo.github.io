@@ -422,7 +422,7 @@ class Game {
 				rangeDom.value = army.soldiers_;
 				spanDom.innerText = army.soldiers_;
 				rangeDom.oninput = function(){spanDom.innerText = rangeDom.value;};
-				buttonDom.onclick = function(){moveDom.style.visibility = "hidden"; game.Move(srcGrid, grid, rangeDom.value);game.Show();};
+				buttonDom.onclick = function(){moveDom.style.visibility = "hidden"; game.Move(srcGrid, grid, +rangeDom.value);game.Show();};
 				moveDom.style.visibility = "";
 			}
 		} else if (phase == 2) {
