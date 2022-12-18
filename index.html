@@ -4,8 +4,9 @@
 
 
     <header  width=720>
-    <div style="font-size:60px"> 英雄无敌棋</div>
+    <div style="font-size:60px"> 英雄无敌棋(内测)</div>
     <div style="font-size:40px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜！！！ </span></div>
+    <div id=operArmyInfo style="font-size:32px">当前操作部队: <span id=soldiers>0</span>兵 <span id=moveAbility>0</span>点移动力 <span id=attackRange>0</span>步攻击距离</div>
 	</header>
     <svg id=board xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-0.1 -0.1 8.2 8.2">
         <circle r="99" fill="#222" />
@@ -402,6 +403,10 @@
                 let armyOperableDom = document.getElementById("operableArmies");
                 let moveDom = document.getElementById("move_inout");
                 let winnerDom = document.getElementById("winner");
+				let armyInfoDom = document.getElementById("operArmyInfo");
+				let soldiersDom = document.getElementById("soldiers");
+				let moveAbilityDom = document.getElementById("moveAbility");
+				let attackRangeDom = document.getElementById("attackRange");
 
                 let srcGrid = -1;
                 let targetGrid = -1;
@@ -412,9 +417,14 @@
                 let OnGridChoice = function(grid, phase) {
                     moveDom.style.visibility = "hidden";
                     if (phase == 0) {
-                        srcGrid = grid;
                         Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
                         let army = armies.find(army => army.grid_ == grid);
+                        srcGrid = grid;
+						soldiersDom.innerText = army.soldiers_;
+						moveAbilityDom.innerText = army.moves_;
+						attackRangeDom.innerText = army.attacks_ == 0 ? 0 : 1 + getLevel(army.soldiers_);
+						armyInfoDom.style.visibility = "";
+						
                         let choices = game.Choices(army.grid_);
                         if (choices.move) {
                             choices.move.forEach((grids, index) => grids.forEach(moveGrid => {
@@ -486,7 +496,7 @@
 
                 let armyOperables = 0;
                 moveDom.style.visibility = "hidden";
-                Array.from(board.children).filter(elmt => elmt.tagName == "text" || elmt.class_ == "mask").forEach(dynElement => board.removeChild(dynElement));
+                Array.from(board.children).filter(elmt => elmt.tagName == "text"  || elmt.class_ == "mask" || elmt.class_ == "sensor").forEach(dynElement => board.removeChild(dynElement));
                 this.#status_.armies_.forEach(army => {
                     let element = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                     element.setAttributeNS(null, 'x', (army.grid_ % 8) + 0.5);
@@ -498,13 +508,25 @@
                     let choices = game.Choices(army.grid_);
                     if (!choices.move || !choices.move.find(grids => grids.length > 0) && choices.attack.length == 0) {
                         element.style = "opacity:0.5";
+						board.appendChild(element);
                     } else {
+						board.appendChild(element);
+						let sensorElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+						sensorElement.setAttributeNS(null, 'x', (army.grid_ % 8));
+						sensorElement.setAttributeNS(null, 'y', (army.grid_ / 8 | 0));
+						sensorElement.setAttributeNS(null, 'width', 1);
+						sensorElement.setAttributeNS(null, 'height', 1);
+						sensorElement.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
+						sensorElement.style = "opacity:0.2";
+						sensorElement.class_ = "sensor";
+						sensorElement.grid_ = army.grid_;
+						sensorElement.onclick = function() {
+							OnGridChoice(army.grid_, 0);
+						};
+						board.appendChild(sensorElement);
                         ++armyOperables;
-                        element.onclick = function() {
-                            OnGridChoice(army.grid_, 0)
-                        };
                     }
-                    board.appendChild(element);
+                    
                 });
 
                 roundDom.innerText = this.#status_.progress_.round_;
@@ -512,6 +534,7 @@
                 playerDom.style.color = this.#status_.progress_.player_ == 0 ? "red" : "blue";
                 armyOperableDom.innerText = armyOperables;
 				winnerDom.style.visibility = this.#status_.winner_ != -1 ? "" : "hidden";
+				armyInfoDom.style.visibility = "hidden";
             }
         }
 
