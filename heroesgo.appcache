@@ -1,6 +1,14 @@
-CACHE MANIFEST
-
-# version 0.1
-
-CACHE:
-/
+{
+  "background_color": "black",
+  "description": "A simple game on board",
+  "icons": [
+    {
+      "src": "heroesgo.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ],
+  "name": "Heroes GO",
+  "short_name": "heroesgo",
+  "start_url": "/"
+}
