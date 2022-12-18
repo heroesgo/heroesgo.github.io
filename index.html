@@ -418,6 +418,11 @@
                     moveDom.style.visibility = "hidden";
                     if (phase == 0) {
                         Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
+					    if(srcGrid == grid) {
+						    srcGrid = -1;
+							armyInfoDom.style.visibility = "hidden";
+							return;
+						}
                         let army = armies.find(army => army.grid_ == grid);
                         srcGrid = grid;
 						soldiersDom.innerText = army.soldiers_;
@@ -511,11 +516,10 @@
 						board.appendChild(element);
                     } else {
 						board.appendChild(element);
-						let sensorElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-						sensorElement.setAttributeNS(null, 'x', (army.grid_ % 8));
-						sensorElement.setAttributeNS(null, 'y', (army.grid_ / 8 | 0));
-						sensorElement.setAttributeNS(null, 'width', 1);
-						sensorElement.setAttributeNS(null, 'height', 1);
+						let sensorElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+						sensorElement.setAttributeNS(null, 'cx', (army.grid_ % 8) + 0.5);
+						sensorElement.setAttributeNS(null, 'cy', (army.grid_ / 8 | 0) + 0.5);
+						sensorElement.setAttributeNS(null, 'r', 0.5);
 						sensorElement.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
 						sensorElement.style = "opacity:0.2";
 						sensorElement.class_ = "sensor";
