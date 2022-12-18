@@ -24,7 +24,7 @@
         <span id=move_inout_range_span>8</span> <button id=move_inout_range_button type="button" style="font-size:60px">确认移动</button>
 		</div>
     </span>
-
+    <p/>
 	<button type="button"  onclick=endTurn() align=right style="font-size:60px">操作完毕</button>
     </footer>
 
@@ -162,14 +162,15 @@
         })
 
         class Instruction {
-            constructor() {
-                this.progress_ = new Progress();
-                this.timestamp_ = 0;
-                this.oper_type_ = 0;
-                this.cell_src_ = 0;
-                this.cell_snk_ = 0;
-                this.soldiers_ = 0;
+            constructor(oper_type, src, snk, num) {
+                this.oper_type_ = oper_type;
+                this.cell_src_ = src || 0;
+                this.cell_snk_ = snk || 0;
+                this.soldiers_ = num || 0;
             }
+			flat() {
+				return [this.oper_type_, this.cell_src_, this.cell_snk_, this.soldiers_];
+			}
         }
 
         // 游戏状态
@@ -203,27 +204,27 @@
             constructor() {
 				this.Reset();
             }
-			Save() {
-				this.#status_.redo_ = [];
-			    this.#status_.history_.push(JSON.stringify({winner:this.#status_.winner_, progress:this.#status_.progress_, armies: this.#status_.armies_}));
-			}
 			Redo() {
-				if (this.#status_.redo_.length > 0) {
-					this.#status_.history_.push(this.#status_.redo_.pop());
+			    if (this.#status_.redo_.length == 0) {
+				  return;
 				}
-				let his = JSON.parse(this.#status_.history_[this.#status_.history_.length - 1]);
-				this.#status_.winner_ = his.winner;
-				this.#status_.progress_ = his.progress;
-				this.#status_.armies_ = his.armies;
+				let redo_tmp = this.#status_.redo_;
+				let hist_tmp = this.#status_.history_;
+				hist_tmp.push(redo_tmp.pop());
+				this.Reset();
+				hist_tmp.forEach(flattenInst => this.OnCmd(new Instruction(...flattenInst)));
+				this.#status_.redo_ = redo_tmp;
 			}
 			Drawback() {
-				if (this.#status_.history_.length > 1) {
-					this.#status_.redo_.push(this.#status_.history_.pop());
+			    if (this.#status_.history_.length == 0) {
+				  return;
 				}
-				let his = JSON.parse(this.#status_.history_[this.#status_.history_.length - 1]);
-				this.#status_.winner_ = his.winner;
-				this.#status_.progress_ = his.progress;
-				this.#status_.armies_ = his.armies;
+				let redo_tmp = this.#status_.redo_;
+				let hist_tmp = this.#status_.history_;
+				redo_tmp.push(hist_tmp.pop());
+				this.Reset();
+				hist_tmp.forEach(flattenInst => this.OnCmd(new Instruction(...flattenInst)));
+				this.#status_.redo_ = redo_tmp;
 			}
 			Reset() {
 			    this.#status_.winner_ = -1;
@@ -242,7 +243,6 @@
                 this.#status_.armies_[0].attacks_ = 1;
 				this.#status_.history_ = [];
 				this.#status_.redo_ = [];
-				this.Save();
 			}
             GetArmies() {
                 return this.#status_.armies_;
@@ -358,7 +358,6 @@
                     itArmyTarget.soldiers_ += num;
                 }
                 ++this.#status_.progress_.step_;
-				this.Save();
                 return InstResult.ok;
             }
             Attack(grid, target) {
@@ -392,7 +391,6 @@
                     }
                 }
                 ++this.#status_.progress_.step_;
-				this.Save();
                 return InstResult.ok;
             }
             Pass() {
@@ -410,17 +408,21 @@
                 this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
                 this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_);
                 this.#status_.progress_.step_ = 0;
-				this.Save();
                 return InstResult.ok;
             }
             OnCmd(inst) {
+				let ret = InstResult.unknown;
                 if (inst.oper_type_ == OperType.move) {
-                    return this.Move(inst.cell_src_, inst.cell_snk_, inst.soldiers_);
+                    ret = this.Move(inst.cell_src_, inst.cell_snk_, inst.soldiers_);
                 } else if (inst.oper_type_ == OperType.attack) {
-                    return this.Attack(inst.cell_src_, inst.cell_snk_);
+                    ret = this.Attack(inst.cell_src_, inst.cell_snk_);
                 } else if (inst.oper_type_ == OperType.pass) {
-                    return this.Pass();
+                    ret = this.Pass();
                 }
+				if (ret == InstResult.ok) {
+					this.#status_.redo_ = [];
+					this.#status_.history_.push(inst.flat());
+				}
                 return InstResult.unknown;
             }
 
@@ -501,7 +503,7 @@
                     } else if (phase == 1) {
                         let army = armies.find(army => army.grid_ == srcGrid);
                         if (army.soldiers_ == 1) {
-                            game.Move(srcGrid, grid, 1);
+                            game.OnCmd(new Instruction(OperType.move, srcGrid, grid, 1));
                             game.Show();
                         } else {
                             Array.from(board.children).filter(elmt => elmt.class_ == "mask" && elmt.grid_ != grid).forEach(maskElement => board.removeChild(maskElement));
@@ -518,14 +520,14 @@
                             };
                             buttonDom.onclick = function() {
                                 moveDom.style.visibility = "hidden";
-                                game.Move(srcGrid, grid, +rangeDom.value);
+								game.OnCmd(new Instruction(OperType.move, srcGrid, grid, +rangeDom.value));
                                 game.Show();
                             };
                             moveDom.style.visibility = "";
                         }
                     } else if (phase == 2) {
                         Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
-                        game.Attack(srcGrid, grid);
+                        game.OnCmd(new Instruction(OperType.attack, srcGrid, grid));
                         game.Show();
                     }
 
@@ -573,11 +575,11 @@
                 armyOperableDom.innerText = armyOperables;
 				winnerDom.style.visibility = this.#status_.winner_ != -1 ? "" : "hidden";
 				armyInfoDom.style.visibility = "hidden";
+				location.href = '#' + encodeURIComponent(JSON.stringify(this.#status_.history_))
             }
         }
 
-        let game = new Game;
-        game.Show();
+        var game = new Game;
 
 		function Drawback() {
 			game.Drawback();	
@@ -591,10 +593,16 @@
 		    if(game.GetWinner() != -1) {
 				game.Reset();	
 			} else {
-				game.Pass();
+				game.OnCmd(new Instruction(OperType.pass));
 			}
             game.Show();
         }
+		window.onload = (event) =>{
+			if(location.hash.length > 1) {
+			   JSON.parse(decodeURIComponent(location.hash.substr(1))).forEach(flattenInst => game.OnCmd(new Instruction(...flattenInst)));
+			}
+			game.Show();
+		};
     </script>
 </body>
 
