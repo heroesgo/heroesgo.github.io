@@ -5,7 +5,8 @@
 
     <header  width=720>
     <div style="font-size:60px"> 英雄无敌棋(内测)</div>
-    <div style="font-size:40px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜！！！ </span></div>
+    <div style="font-size:32px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜 </span><button type="button"  onclick=Drawback() align=right style="font-size:40px">回退</button><span> </span>
+	<button type="button"  onclick=Redo() align=right style="font-size:40px">重做</button><span> </span></div>
     <div id=operArmyInfo style="font-size:32px">当前操作部队: <span id=soldiers>0</span>兵 <span id=moveAbility>0</span>点移动力 <span id=attackRange>0</span>步攻击距离</div>
 	</header>
     <svg id=board xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-0.1 -0.1 8.2 8.2">
@@ -22,8 +23,9 @@
         <input id=move_inout_range type="range" min="1" max="8" step="1" value="8" style="width:400px" />
         <span id=move_inout_range_span>8</span> <button id=move_inout_range_button type="button" style="font-size:60px">确认移动</button>
 		</div>
-        
-    </span><span> </span><button type="button"  onclick=endTurn() align=right style="font-size:60px">操作完毕</button>
+    </span>
+
+	<button type="button"  onclick=endTurn() align=right style="font-size:60px">操作完毕</button>
     </footer>
 
     <script>
@@ -179,7 +181,8 @@
                 this.alliances_ = []; //std::vector<Alliance>
                 this.playerInfos = []; // std::vector<Player> 
                 this.armies_ = []; //std::vector<Army>  
-                this.history_ = []; //std::vector<Instruction>  
+                this.history_ = [];
+                this.redo_ = [];
             }
         }
 
@@ -198,11 +201,36 @@
         class Game {
             #status_ = new GameStatus;
             constructor() {
-
-                this.#status_.winner_ = -1;
+				this.Reset();
+            }
+			Save() {
+				this.#status_.redo_ = [];
+			    this.#status_.history_.push(JSON.stringify({winner:this.#status_.winner_, progress:this.#status_.progress_, armies: this.#status_.armies_}));
+			}
+			Redo() {
+				if (this.#status_.redo_.length > 0) {
+					this.#status_.history_.push(this.#status_.redo_.pop());
+				}
+				let his = JSON.parse(this.#status_.history_[this.#status_.history_.length - 1]);
+				this.#status_.winner_ = his.winner;
+				this.#status_.progress_ = his.progress;
+				this.#status_.armies_ = his.armies;
+			}
+			Drawback() {
+				if (this.#status_.history_.length > 1) {
+					this.#status_.redo_.push(this.#status_.history_.pop());
+				}
+				let his = JSON.parse(this.#status_.history_[this.#status_.history_.length - 1]);
+				this.#status_.winner_ = his.winner;
+				this.#status_.progress_ = his.progress;
+				this.#status_.armies_ = his.armies;
+			}
+			Reset() {
+			    this.#status_.winner_ = -1;
                 this.#status_.progress_.round_ = 1;
-                this.#status_.armies_.push(new Army());
-                this.#status_.armies_.push(new Army());
+                this.#status_.progress_.player_ = 0;
+                this.#status_.progress_.step_ = 0;
+                this.#status_.armies_ = [new Army(), new Army()];
                 this.#status_.armies_[0].grid_ = 56;
                 this.#status_.armies_[1].grid_ = 7;
                 this.#status_.armies_[1].player_ = 1;
@@ -212,7 +240,10 @@
                 this.#status_.armies_[1].moves_ = 3;
                 this.#status_.armies_[0].attacks_ = 1;
                 this.#status_.armies_[0].attacks_ = 1;
-            }
+				this.#status_.history_ = [];
+				this.#status_.redo_ = [];
+				this.Save();
+			}
             GetArmies() {
                 return this.#status_.armies_;
             }
@@ -327,6 +358,7 @@
                     itArmyTarget.soldiers_ += num;
                 }
                 ++this.#status_.progress_.step_;
+				this.Save();
                 return InstResult.ok;
             }
             Attack(grid, target) {
@@ -360,6 +392,7 @@
                     }
                 }
                 ++this.#status_.progress_.step_;
+				this.Save();
                 return InstResult.ok;
             }
             Pass() {
@@ -377,6 +410,7 @@
                 this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
                 this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_);
                 this.#status_.progress_.step_ = 0;
+				this.Save();
                 return InstResult.ok;
             }
             OnCmd(inst) {
@@ -545,9 +579,17 @@
         let game = new Game;
         game.Show();
 
+		function Drawback() {
+			game.Drawback();	
+            game.Show();
+        }
+		function Redo() {
+			game.Redo();	
+            game.Show();
+        }
         function endTurn() {
 		    if(game.GetWinner() != -1) {
-				game = new Game;	
+				game.Reset();	
 			} else {
 				game.Pass();
 			}
