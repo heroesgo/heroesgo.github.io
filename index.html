@@ -1,479 +1,529 @@
 <html>
+
 <body>
 
 
 
-<div>英雄无敌棋</div>
-<div>回合<span id=round>0</span> 当前玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <button type="button" onclick=endTurn()>操作完毕</button></div>
-<svg id=board xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="-0.1 -0.1 8.2 8.2">
+    <div>英雄无敌棋</div>
+    <div>回合<span id=round>0</span> 当前玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜！！！ </span></div>
+    <svg id=board xmlns="http://www.w3.org/2000/svg" width="560" height="560" viewBox="-0.1 -0.1 8.2 8.2">
 
-<circle r="99" fill="#222" /><path d="M0,0.5h8 M1,1.5h7 M0,2.5h7 M1,3.5h7 M0,4.5h7 M1,5.5h7 M0,6.5h7 M1,7.5h7" stroke="#aaa" stroke-dasharray="1"/>
+        <circle r="99" fill="#222" />
+        <path d="M0,0.5h8 M1,1.5h7 M0,2.5h7 M1,3.5h7 M0,4.5h7 M1,5.5h7 M0,6.5h7 M1,7.5h7" stroke="#aaa" stroke-dasharray="1" />
 
-<text x=7.5 y=0.8 font-size="0.05em" text-anchor="middle" fill=red>8</text>
-<text x=0.5 y=7.8 font-size="0.05em" text-anchor="middle" fill=blue>8</text>
+        <text x=7.5 y=0.8 font-size="0.05em" text-anchor="middle" fill=red>8</text>
+        <text x=0.5 y=7.8 font-size="0.05em" text-anchor="middle" fill=blue>8</text>
 
-</svg>
-<div id=move_inout style="visibility:hidden">
- <input id=move_inout_range type="range" min="1" max="8" step="1" value="8" />
- <span id=move_inout_range_span>8</span>
- <button  id=move_inout_range_button type="button" srcGrid=0 targetGrid=0 num=8 >确认移动</button>
-</div>
+    </svg>
+    <div id=move_inout style="visibility:hidden">
+        <input id=move_inout_range type="range" min="1" max="8" step="1" value="8" />
+        <span id=move_inout_range_span>8</span>
+        <button id=move_inout_range_button type="button" srcGrid=0 targetGrid=0 num=8>确认移动</button>
+    </div>
+    <button type="button" onclick=endTurn()>操作完毕</button>
 
+    <script>
+        ///  部队信息
+        class Army {
+            constructor() {
+                this.grid_ = 0; /// 所在格位
+                this.player_ = 0; /// 所属玩家
+                this.soldiers_ = 0; /// 当前兵力
+                this.last_sustain_ = 0; /// 兵损，只记录一回合
+                this.hero_ = 0; /// 当前英雄
+                this.moves_ = 0; /// 剩余移动力
+                this.attacks_ = 0; /// 剩余攻击机会
+            }
+        }
 
-<script>
-
-///  部队信息
-class Army {
- constructor() {
-  this.grid_ = 0; /// 所在格位
-  this.player_ = 0; /// 所属玩家
-  this.soldiers_ = 0; /// 当前兵力
-  this.last_sustain_ = 0; /// 兵损，只记录一回合
-  this.hero_ = 0; /// 当前英雄
-  this.moves_ = 0; /// 剩余移动力
-  this.attacks_ = 0; /// 剩余攻击机会
-}}
-
-class Hero {
- constructor() {
-  this.id_= 0; /// 
-  this.level_= 0; /// 等级
-  this.moves_range_= 0; /// 移动力加成
-  this.attack_range_= 0; /// 攻击
-  this.view_range_= 0;
-  this.passive_level_= 0;
-  this.ultimate_cool_= 0;
-}}
-
-
-class HeroStat {
- constructor() {
-  this.hero_= 0;
-  this.kill_= 0;
-  this.dead_= 0;
-  this.assistant_= 0;
-  this.damage_= 0;
-  this.sustain_= 0;
-  this.cure_= 0;
-}}
-
-class HeroStatus {
- constructor() {
-  this.hero_= 0;
-  this.moved_= 0;
-  this.ultimating_= 0;
-  this.attack_skill_cooldown_= 0;
-  this.move_skill_cooldown_= 0;
-  this.ultimate_skill_cooldown_= 0;
-}}
+        class Hero {
+            constructor() {
+                this.id_ = 0; /// 
+                this.level_ = 0; /// 等级
+                this.moves_range_ = 0; /// 移动力加成
+                this.attack_range_ = 0; /// 攻击
+                this.view_range_ = 0;
+                this.passive_level_ = 0;
+                this.ultimate_cool_ = 0;
+            }
+        }
 
 
+        class HeroStat {
+            constructor() {
+                this.hero_ = 0;
+                this.kill_ = 0;
+                this.dead_ = 0;
+                this.assistant_ = 0;
+                this.damage_ = 0;
+                this.sustain_ = 0;
+                this.cure_ = 0;
+            }
+        }
 
-/// 游戏进度
-class Progress {
- constructor() {
- this.round_= 0; /// 回合数
- this.player_= 0; /// 玩家轮次
- this.step_= 0; /// 轮次内步骤编号
-}}
-
-class Buff {
- constructor() {
-  this.id_= 0;
-  this.type_= 0;
-  this.grid_= 0;
-  this.from_ts_= new Progress();
-  this.from_= new Army;
-  this.num_= 0;
-}}
-
-/// 玩家
-class Player {
- constructor() {
- this.id_= 0; /// 玩家编号
- this.name_ = "";
- this.soldiers_onboard_= 0;
- this.soldiers_offboard_= 0;
- this.attack_cnt_= 0;
- this.die_cnt_= 0;
- this.last_attack_round_= 0;
- this.last_act_round= 0;
-}}
-
-class Grid {
- constructor() {
- this.id_ = 0;
- this.coordinate = new Int32Array(0,0);
- this.heights_ = 0;
- this.birth_player_ = 0;
-}}
-
-class Map {
- constructor() {
- this.name_ = "";
- this.cell_num_ = 0;
- this.grids_ =  new Int32Array();
-}}
-
-class Alliance {
- constructor() {
- this.id_ = 0;
- this.name_ = "";
- this.players_ = new Int32Array();
-}} 
-
-
-const OperType = Object.freeze({
-	move : 0,
-	attack: 1,
-	add: 2,
-	pass: 3
-})
-
-const InstResult = Object.freeze({
-   ok:"ok",
-   invalid_army:"invalid army",
-   invalid_target:"invalid target",
-   invalid_num:"invalid number",
-   no_chance:"no chance",
-   out_of_range:"out of range",
-   blocked:"blocked",
-   army_limit:"reach army limit",
-   population_limit:"reach population limit",
-   gameover:"Game over!",
-   unknown:"not supported"
-})
-
-class Instruction {
- constructor() {
- this.progress_ = new Progress();
- this.timestamp_ = 0;
- this.oper_type_ = 0;
- this.cell_src_ = 0;
- this.cell_snk_ = 0;
- this.soldiers_ = 0;
-}} 
-
-// 游戏状态
-class GameStatus{
- constructor() {
- this.map_ = new Map();
- this.winner_ = -1;
- this.progress_ = new Progress();
- this.alliances_ = []; //std::vector<Alliance>
- this.playerInfos = []; // std::vector<Player> 
- this.armies_ = []; //std::vector<Army>  
- this.history_ = []; //std::vector<Instruction>  
-}} 
-
-function getLevel(num) {
-   level = 0;
-   while(num > 0) {
-       ++level;
-       num = Math.floor(num / 2);
-   }
-   return level;
-}
+        class HeroStatus {
+            constructor() {
+                this.hero_ = 0;
+                this.moved_ = 0;
+                this.ultimating_ = 0;
+                this.attack_skill_cooldown_ = 0;
+                this.move_skill_cooldown_ = 0;
+                this.ultimate_skill_cooldown_ = 0;
+            }
+        }
 
 
 
+        /// 游戏进度
+        class Progress {
+            constructor() {
+                this.round_ = 0; /// 回合数
+                this.player_ = 0; /// 玩家轮次
+                this.step_ = 0; /// 轮次内步骤编号
+            }
+        }
 
-class Game {
-  #status_ = new GameStatus;
-  constructor() {
-   
-     this.#status_.winner_ = -1;
-     this.#status_.progress_.round_ = 1;
-     this.#status_.armies_.push (new Army());
-     this.#status_.armies_.push (new Army());
-     this.#status_.armies_[0].grid_ = 56;
-     this.#status_.armies_[1].grid_ = 7;
-     this.#status_.armies_[1].player_ = 1;
-     this.#status_.armies_[0].soldiers_ = 8;
-     this.#status_.armies_[1].soldiers_ = 8;
-     this.#status_.armies_[0].moves_ = 3;
-     this.#status_.armies_[1].moves_ = 3;
-     this.#status_.armies_[0].attacks_ = 1;
-     this.#status_.armies_[0].attacks_ = 1;
-  }
-  GetArmies() { return this.#status_.armies_;}
-  
-  Reachable(army) {
-    let reachable = []
-	const grid = army.grid_;
-	let visted = [grid];
-    let lastWave = [grid];
-    for(let i = 1; i <= army.moves_; ++i){
-     let currReach = [];
-     let currWave = [];
-	 lastWave.forEach(grid => {
-		[1,-1,8,-8].forEach(tryMove => {
-		  const tryPos = grid + tryMove;
-		  if(tryPos >= 0 && tryPos < 64 && Math.abs(grid % 8 - tryPos % 8) <= 1 && !currReach.includes(tryPos) && !visted.includes(tryPos)) {
-		    const blockArmy = this.#status_.armies_.find(x => x.grid_ == tryPos);
-			if (!blockArmy) {
-			  currReach.push(tryPos);
-			  currWave.push(tryPos);
-			}
-			else if(blockArmy.player_ == army.player_) {
-			  currReach.push(tryPos);
-			}
-		  }
-		});
-	 });
-	 reachable.push(currReach);
-	 lastWave = currWave;
-	 visted.push(...currWave);
-   }
-    return reachable;
-  }
-  
-  Attackable(army) {
-    return 0 == army.attacks_ ? [] : this.#status_.armies_.filter(enemy => enemy.player_ != army.player_)
-     .filter(enemy => Math.abs(enemy.grid_ % 8  - army.grid_ % 8) + Math.abs((enemy.grid_ / 8 | 0)   - (army.grid_ / 8 | 0)) <= 1 + getLevel(army.soldiers_))
-	 .map(enemy => enemy.grid_);
-  }
-  Choices(grid) {
-   if(this.#status_.winner_ != -1) {return {err:InstResult.gameover}}
-   const army = this.#status_.armies_.find(army => army.grid_ == grid);
-   if(!army || army.player_ != this.#status_.progress_.player_) {
-      return {err:InstResult.invalid_army};
-   }
-   return {move:this.Reachable(army), attack:this.Attackable(army)};
-  }
-  Supply(num) {
-    return InstResult.ok;
-  }
-  Move(grid, target, num){
-   if(this.#status_.winner_ != -1) {return InstResult.gameover;}
-   if(target == grid) {return InstResult.invalid_target;}
-   let armyIdx = this.#status_.armies_.findIndex(army => army.grid_ == grid);
-   if(armyIdx == -1 || this.#status_.armies_[armyIdx].player_ != this.#status_.progress_.player_) {
-      return InstResult.invalid_army;
-   }
-   let army = this.#status_.armies_[armyIdx];
-   if(army.moves_ == 0) {
-      return InstResult.no_chance;
-   }
-   if (num <= 0) {
-     num = army.soldiers_;
-   } else if (army.soldiers_ < num || num === undefined) {
-     return InstResult.invalid_num;
-   }
-   let itArmyTarget = this.#status_.armies_.find(army => army.grid_ == target);
-   if(itArmyTarget && itArmyTarget.player_ != this.#status_.progress_.player_) {
-     return InstResult.invalid_target;
-   }
-   if(Math.abs(target % 8  - grid % 8) + Math.abs((target / 8 | 0)  - (grid / 8 | 0)) > army.moves_) {
-     return InstResult.out_of_range;
-   }
-   const moves = 1 + this.Reachable(army).findIndex(wave => wave.includes(target));
-   if (moves == 0) {
-     return InstResult.blocked;
-   }
-   // TODO: check moves if blocked by other army;
-  // check army_limit
+        class Buff {
+            constructor() {
+                this.id_ = 0;
+                this.type_ = 0;
+                this.grid_ = 0;
+                this.from_ts_ = new Progress();
+                this.from_ = new Army;
+                this.num_ = 0;
+            }
+        }
 
-  if(!itArmyTarget && num == army.soldiers_) {
-     army.grid_ = target;
-     army.moves_ = 0;
-     army.last_sustain_ = 0;
-     army.attacks_ = 0;   
-  } else if (num == army.soldiers_) {
-     itArmyTarget.soldiers_ += num;
-     this.#status_.armies_.splice(armyIdx,1)
-  } else if(!itArmyTarget){
-     army.moves_ -= moves;
-     army.soldiers_ -= num;
-     let newArmy = new Army();
-     newArmy.grid_ = target;
-     newArmy.player_ = army.player_;
-     newArmy.soldiers_ = num;
-     this.#status_.armies_.push(newArmy);
-  } else {
-     army.moves_ -= moves;
-     army.soldiers_ -= num;
-     itArmyTarget.soldiers_ += num;
-  }
-  ++this.#status_.progress_.step_;
-  return InstResult.ok;
-  }
-  Attack(grid, target) {
-   if(this.#status_.winner_ != -1) {return InstResult.gameover;}
-   let army = this.#status_.armies_.find(army => army.grid_ == grid);
-   if(!army  || army.player_ != this.#status_.progress_.player_) {
-      return InstResult.invalid_army;
-   }
-   if (army.attacks_ == 0) {
-     return InstResult.no_chance;
-   }
-   let targetArmyIdx = this.#status_.armies_.findIndex(army => army.grid_ == target);
-   if(targetArmyIdx == -1 || this.#status_.armies_[targetArmyIdx].player_ == this.#status_.progress_.player_) {
-      return InstResult.invalid_target;
-   }
-   if(Math.abs(target % 8  - grid % 8) + Math.abs((target / 8 | 0)   - (grid / 8 | 0)) > 1 + getLevel(army.soldiers_)) {
-     return InstResult.out_of_range;
-   }
+        /// 玩家
+        class Player {
+            constructor() {
+                this.id_ = 0; /// 玩家编号
+                this.name_ = "";
+                this.soldiers_onboard_ = 0;
+                this.soldiers_offboard_ = 0;
+                this.attack_cnt_ = 0;
+                this.die_cnt_ = 0;
+                this.last_attack_round_ = 0;
+                this.last_act_round = 0;
+            }
+        }
 
-   --army.attacks_;
-     army.moves_ = 0;
-     --this.#status_.armies_[targetArmyIdx].soldiers_;
-     ++this.#status_.armies_[targetArmyIdx].last_sustain_;
-  if (0 == this.#status_.armies_[targetArmyIdx].soldiers_) {
-     if (-1 == this.#status_.armies_.findIndex(army => army.grid_ == target)) {
-       this.#status_.winner_ = this.#status_.progress_.player_;
-       return InstResult.ok;
-     }
-  }
-    ++this.#status_.progress_.step_;
-    return InstResult.ok;
-  }
-  Pass() {
-   this.#status_.armies_.forEach(army => {
-      if(army.player_ == this.#status_.progress_.player_) {
-          army.moves_ = army.attacks_ = army.last_sustain_ = 0;
-      } else {
-          army.moves_ = 3;
-          army.attacks_ = 1;
-      }
-   });
-   this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
-   this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_); 
-   this.#status_.progress_.step_ = 0; 
-   return InstResult.ok;
-  }
-  OnCmd(inst)
-  {
-   if(inst.oper_type_ == OperType.move) {
-       return this.Move(inst.cell_src_, inst.cell_snk_, inst.soldiers_);
-   } else if(inst.oper_type_ == OperType.attack) {
-       return this.Attack(inst.cell_src_, inst.cell_snk_);
-   } else if(inst.oper_type_ == OperType.pass) {
-       return this.Pass();
-   }
-   return InstResult.unknown;
-  }
+        class Grid {
+            constructor() {
+                this.id_ = 0;
+                this.coordinate = new Int32Array(0, 0);
+                this.heights_ = 0;
+                this.birth_player_ = 0;
+            }
+        }
 
-  GetWinner(){ return this.#status_.winner_;}
-  CurrProgress(){ return this.#status_.progress_;}
-  Show()
-  {
-      let board = document.getElementById("board");
-      let roundDom = document.getElementById("round");
-      let playerDom = document.getElementById("round");
-      let armyOperableDom = document.getElementById("operableArmies");
-	  let moveDom = document.getElementById("move_inout");
+        class Map {
+            constructor() {
+                this.name_ = "";
+                this.cell_num_ = 0;
+                this.grids_ = new Int32Array();
+            }
+        }
 
-	  let srcGrid = -1;
-	  let targetGrid = -1;
-	  let num = -1;
-	  
-	  const armies = this.#status_.armies_;
-	  const game = this;
-	  let OnGridChoice = function(grid, phase) {
-	    moveDom.style.visibility = "hidden";
-	    if(phase == 0) {
-		  srcGrid = grid;
-		  Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(txtElement => board.removeChild(txtElement));
-		  let army = armies.find(army => army.grid_ == grid);
-		  let choices = game.Choices(army.grid_);
-		  if (choices.move) {
-		    choices.move.forEach((grids,index) => grids.forEach(moveGrid => {
-				let element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-				element.setAttributeNS(null, 'x', (moveGrid % 8));
-				element.setAttributeNS(null, 'y', (moveGrid / 8 | 0));
-				element.setAttributeNS(null, 'width', 1);
-				element.setAttributeNS(null, 'height', 1);
-				element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
-				element.style = "opacity:0.4";
-				element.class_ = "mask";
-				element.onclick = function(){OnGridChoice(moveGrid,1)};
-				board.appendChild(element);				
-			}));
-		  }
-		  if (choices.attack) {
-		    choices.attack.forEach(attackGrid => {
-				let element = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-				element.setAttributeNS(null, 'cx', (attackGrid % 8) + 0.5);
-				element.setAttributeNS(null, 'cy', (attackGrid / 8 | 0) + 0.5);
-				element.setAttributeNS(null, 'r', "0.5");
-				element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
-				element.style = "opacity:0.4";
-				element.class_ = "mask";
-				element.onclick = function(){OnGridChoice(attackGrid,2)};
-				board.appendChild(element);				
-			});
-		  }
-		} else if (phase == 1) {
-			let army = armies.find(army => army.grid_ == srcGrid);
-			if (army.soldiers_ == 1) {
-				game.Move(srcGrid, grid, 1);
-				game.Show();
+        class Alliance {
+            constructor() {
+                this.id_ = 0;
+                this.name_ = "";
+                this.players_ = new Int32Array();
+            }
+        }
+
+
+        const OperType = Object.freeze({
+            move: 0,
+            attack: 1,
+            add: 2,
+            pass: 3
+        })
+
+        const InstResult = Object.freeze({
+            ok: "ok",
+            invalid_army: "invalid army",
+            invalid_target: "invalid target",
+            invalid_num: "invalid number",
+            no_chance: "no chance",
+            out_of_range: "out of range",
+            blocked: "blocked",
+            army_limit: "reach army limit",
+            population_limit: "reach population limit",
+            gameover: "Game over!",
+            unknown: "not supported"
+        })
+
+        class Instruction {
+            constructor() {
+                this.progress_ = new Progress();
+                this.timestamp_ = 0;
+                this.oper_type_ = 0;
+                this.cell_src_ = 0;
+                this.cell_snk_ = 0;
+                this.soldiers_ = 0;
+            }
+        }
+
+        // 游戏状态
+        class GameStatus {
+            constructor() {
+                this.map_ = new Map();
+                this.winner_ = -1;
+                this.progress_ = new Progress();
+                this.alliances_ = []; //std::vector<Alliance>
+                this.playerInfos = []; // std::vector<Player> 
+                this.armies_ = []; //std::vector<Army>  
+                this.history_ = []; //std::vector<Instruction>  
+            }
+        }
+
+        function getLevel(num) {
+            level = 0;
+            while (num > 0) {
+                ++level;
+                num = Math.floor(num / 2);
+            }
+            return level;
+        }
+
+
+
+
+        class Game {
+            #status_ = new GameStatus;
+            constructor() {
+
+                this.#status_.winner_ = -1;
+                this.#status_.progress_.round_ = 1;
+                this.#status_.armies_.push(new Army());
+                this.#status_.armies_.push(new Army());
+                this.#status_.armies_[0].grid_ = 56;
+                this.#status_.armies_[1].grid_ = 7;
+                this.#status_.armies_[1].player_ = 1;
+                this.#status_.armies_[0].soldiers_ = 8;
+                this.#status_.armies_[1].soldiers_ = 8;
+                this.#status_.armies_[0].moves_ = 3;
+                this.#status_.armies_[1].moves_ = 3;
+                this.#status_.armies_[0].attacks_ = 1;
+                this.#status_.armies_[0].attacks_ = 1;
+            }
+            GetArmies() {
+                return this.#status_.armies_;
+            }
+
+            Reachable(army) {
+                let reachable = []
+                const grid = army.grid_;
+                let visted = [grid];
+                let lastWave = [grid];
+                for (let i = 1; i <= army.moves_; ++i) {
+                    let currReach = [];
+                    let currWave = [];
+                    lastWave.forEach(grid => {
+                        [1, -1, 8, -8].forEach(tryMove => {
+                            const tryPos = grid + tryMove;
+                            if (tryPos >= 0 && tryPos < 64 && Math.abs(grid % 8 - tryPos % 8) <= 1 && !currReach.includes(tryPos) && !visted.includes(tryPos)) {
+                                const blockArmy = this.#status_.armies_.find(x => x.grid_ == tryPos);
+                                if (!blockArmy) {
+                                    currReach.push(tryPos);
+                                    currWave.push(tryPos);
+                                } else if (blockArmy.player_ == army.player_) {
+                                    currReach.push(tryPos);
+                                }
+                            }
+                        });
+                    });
+                    reachable.push(currReach);
+                    lastWave = currWave;
+                    visted.push(...currWave);
+                }
+                return reachable;
+            }
+
+            Attackable(army) {
+                return 0 == army.attacks_ ? [] : this.#status_.armies_.filter(enemy => enemy.player_ != army.player_)
+                    .filter(enemy => Math.abs(enemy.grid_ % 8 - army.grid_ % 8) + Math.abs((enemy.grid_ / 8 | 0) - (army.grid_ / 8 | 0)) <= 1 + getLevel(army.soldiers_))
+                    .map(enemy => enemy.grid_);
+            }
+            Choices(grid) {
+                if (this.#status_.winner_ != -1) {
+                    return {
+                        err: InstResult.gameover
+                    }
+                }
+                const army = this.#status_.armies_.find(army => army.grid_ == grid);
+                if (!army || army.player_ != this.#status_.progress_.player_) {
+                    return {
+                        err: InstResult.invalid_army
+                    };
+                }
+                return {
+                    move: this.Reachable(army),
+                    attack: this.Attackable(army)
+                };
+            }
+            Supply(num) {
+                return InstResult.ok;
+            }
+            Move(grid, target, num) {
+                if (this.#status_.winner_ != -1) {
+                    return InstResult.gameover;
+                }
+                if (target == grid) {
+                    return InstResult.invalid_target;
+                }
+                let armyIdx = this.#status_.armies_.findIndex(army => army.grid_ == grid);
+                if (armyIdx == -1 || this.#status_.armies_[armyIdx].player_ != this.#status_.progress_.player_) {
+                    return InstResult.invalid_army;
+                }
+                let army = this.#status_.armies_[armyIdx];
+                if (army.moves_ == 0) {
+                    return InstResult.no_chance;
+                }
+                if (num <= 0) {
+                    num = army.soldiers_;
+                } else if (army.soldiers_ < num || num === undefined) {
+                    return InstResult.invalid_num;
+                }
+                let itArmyTarget = this.#status_.armies_.find(army => army.grid_ == target);
+                if (itArmyTarget && itArmyTarget.player_ != this.#status_.progress_.player_) {
+                    return InstResult.invalid_target;
+                }
+                if (Math.abs(target % 8 - grid % 8) + Math.abs((target / 8 | 0) - (grid / 8 | 0)) > army.moves_) {
+                    return InstResult.out_of_range;
+                }
+                const moves = 1 + this.Reachable(army).findIndex(wave => wave.includes(target));
+                if (moves == 0) {
+                    return InstResult.blocked;
+                }
+                // TODO: check moves if blocked by other army;
+                // check army_limit
+
+                if (!itArmyTarget && num == army.soldiers_) {
+                    army.grid_ = target;
+                    army.moves_ = 0;
+                    army.last_sustain_ = 0;
+                    army.attacks_ = 0;
+                } else if (num == army.soldiers_) {
+                    itArmyTarget.soldiers_ += num;
+                    this.#status_.armies_.splice(armyIdx, 1)
+                } else if (!itArmyTarget) {
+                    army.moves_ -= moves;
+                    army.soldiers_ -= num;
+                    let newArmy = new Army();
+                    newArmy.grid_ = target;
+                    newArmy.player_ = army.player_;
+                    newArmy.soldiers_ = num;
+                    this.#status_.armies_.push(newArmy);
+                } else {
+                    army.moves_ -= moves;
+                    army.soldiers_ -= num;
+                    itArmyTarget.soldiers_ += num;
+                }
+                ++this.#status_.progress_.step_;
+                return InstResult.ok;
+            }
+            Attack(grid, target) {
+                if (this.#status_.winner_ != -1) {
+                    return InstResult.gameover;
+                }
+                let army = this.#status_.armies_.find(army => army.grid_ == grid);
+                if (!army || army.player_ != this.#status_.progress_.player_) {
+                    return InstResult.invalid_army;
+                }
+                if (army.attacks_ == 0) {
+                    return InstResult.no_chance;
+                }
+                let targetArmyIdx = this.#status_.armies_.findIndex(army => army.grid_ == target);
+                if (targetArmyIdx == -1 || this.#status_.armies_[targetArmyIdx].player_ == this.#status_.progress_.player_) {
+                    return InstResult.invalid_target;
+                }
+                if (Math.abs(target % 8 - grid % 8) + Math.abs((target / 8 | 0) - (grid / 8 | 0)) > 1 + getLevel(army.soldiers_)) {
+                    return InstResult.out_of_range;
+                }
+
+                --army.attacks_;
+                army.moves_ = 0;
+                --this.#status_.armies_[targetArmyIdx].soldiers_;
+                ++this.#status_.armies_[targetArmyIdx].last_sustain_;
+                if (0 == this.#status_.armies_[targetArmyIdx].soldiers_) {
+                    this.#status_.armies_.splice(targetArmyIdx, 1);
+                    if (-1 == this.#status_.armies_.findIndex(army => army.player_ != this.#status_.progress_.player_)) {
+                        this.#status_.winner_ = this.#status_.progress_.player_;
+                        return InstResult.ok;
+                    }
+                }
+                ++this.#status_.progress_.step_;
+                return InstResult.ok;
+            }
+            Pass() {
+			    if (this.#status_.winner_ != -1) {
+                    return InstResult.gameover;
+                }
+                this.#status_.armies_.forEach(army => {
+                    if (army.player_ == this.#status_.progress_.player_) {
+                        army.moves_ = army.attacks_ = army.last_sustain_ = 0;
+                    } else {
+                        army.moves_ = 3;
+                        army.attacks_ = 1;
+                    }
+                });
+                this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
+                this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_);
+                this.#status_.progress_.step_ = 0;
+                return InstResult.ok;
+            }
+            OnCmd(inst) {
+                if (inst.oper_type_ == OperType.move) {
+                    return this.Move(inst.cell_src_, inst.cell_snk_, inst.soldiers_);
+                } else if (inst.oper_type_ == OperType.attack) {
+                    return this.Attack(inst.cell_src_, inst.cell_snk_);
+                } else if (inst.oper_type_ == OperType.pass) {
+                    return this.Pass();
+                }
+                return InstResult.unknown;
+            }
+
+            GetWinner() {
+                return this.#status_.winner_;
+            }
+            CurrProgress() {
+                return this.#status_.progress_;
+            }
+            Show() {
+                let board = document.getElementById("board");
+                let roundDom = document.getElementById("round");
+                let playerDom = document.getElementById("player");
+                let armyOperableDom = document.getElementById("operableArmies");
+                let moveDom = document.getElementById("move_inout");
+                let winnerDom = document.getElementById("winner");
+
+                let srcGrid = -1;
+                let targetGrid = -1;
+                let num = -1;
+
+                const armies = this.#status_.armies_;
+                const game = this;
+                let OnGridChoice = function(grid, phase) {
+                    moveDom.style.visibility = "hidden";
+                    if (phase == 0) {
+                        srcGrid = grid;
+                        Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
+                        let army = armies.find(army => army.grid_ == grid);
+                        let choices = game.Choices(army.grid_);
+                        if (choices.move) {
+                            choices.move.forEach((grids, index) => grids.forEach(moveGrid => {
+                                let element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                                element.setAttributeNS(null, 'x', (moveGrid % 8));
+                                element.setAttributeNS(null, 'y', (moveGrid / 8 | 0));
+                                element.setAttributeNS(null, 'width', 1);
+                                element.setAttributeNS(null, 'height', 1);
+                                element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
+                                element.style = "opacity:0.4";
+                                element.class_ = "mask";
+                                element.grid_ = moveGrid;
+                                element.onclick = function() {
+                                    OnGridChoice(moveGrid, 1)
+                                };
+                                board.appendChild(element);
+                            }));
+                        }
+                        if (choices.attack) {
+                            choices.attack.forEach(attackGrid => {
+                                let element = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                                element.setAttributeNS(null, 'cx', (attackGrid % 8) + 0.5);
+                                element.setAttributeNS(null, 'cy', (attackGrid / 8 | 0) + 0.5);
+                                element.setAttributeNS(null, 'r', "0.5");
+                                element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
+                                element.style = "opacity:0.4";
+                                element.class_ = "mask";
+                                element.grid_ = attackGrid;
+                                element.onclick = function() {
+                                    OnGridChoice(attackGrid, 2)
+                                };
+                                board.appendChild(element);
+                            });
+                        }
+                    } else if (phase == 1) {
+                        let army = armies.find(army => army.grid_ == srcGrid);
+                        if (army.soldiers_ == 1) {
+                            game.Move(srcGrid, grid, 1);
+                            game.Show();
+                        } else {
+                            Array.from(board.children).filter(elmt => elmt.class_ == "mask" && elmt.grid_ != grid).forEach(maskElement => board.removeChild(maskElement));
+                            let rangeDom = document.getElementById("move_inout_range");
+                            let spanDom = document.getElementById("move_inout_range_span");
+                            let buttonDom = document.getElementById("move_inout_range_button");
+
+
+                            rangeDom.max = army.soldiers_;
+                            rangeDom.value = army.soldiers_;
+                            spanDom.innerText = army.soldiers_;
+                            rangeDom.oninput = function() {
+                                spanDom.innerText = rangeDom.value;
+                            };
+                            buttonDom.onclick = function() {
+                                moveDom.style.visibility = "hidden";
+                                game.Move(srcGrid, grid, +rangeDom.value);
+                                game.Show();
+                            };
+                            moveDom.style.visibility = "";
+                        }
+                    } else if (phase == 2) {
+                        Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
+                        game.Attack(srcGrid, grid);
+                        game.Show();
+                    }
+
+                }
+
+
+
+                let armyOperables = 0;
+                moveDom.style.visibility = "hidden";
+                Array.from(board.children).filter(elmt => elmt.tagName == "text" || elmt.class_ == "mask").forEach(dynElement => board.removeChild(dynElement));
+                this.#status_.armies_.forEach(army => {
+                    let element = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    element.setAttributeNS(null, 'x', (army.grid_ % 8) + 0.5);
+                    element.setAttributeNS(null, 'y', (army.grid_ / 8 | 0) + 0.8);
+                    element.setAttributeNS(null, 'font-size', "0.05em");
+                    element.setAttributeNS(null, 'text-anchor', "middle");
+                    element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
+                    element.textContent = army.soldiers_;
+                    let choices = game.Choices(army.grid_);
+                    if (!choices.move || !choices.move.find(grids => grids.length > 0) && choices.attack.length == 0) {
+                        element.style = "opacity:0.5";
+                    } else {
+                        ++armyOperables;
+                        element.onclick = function() {
+                            OnGridChoice(army.grid_, 0)
+                        };
+                    }
+                    board.appendChild(element);
+                });
+
+                roundDom.innerText = this.#status_.progress_.round_;
+                playerDom.innerText = this.#status_.progress_.player_ == 0 ? "Red" : "Blue";
+                playerDom.style.color = this.#status_.progress_.player_ == 0 ? "red" : "blue";
+                armyOperableDom.innerText = armyOperables;
+				winnerDom.style.visibility = this.#status_.winner_ != -1 ? "" : "hidden";
+            }
+        }
+
+        let game = new Game;
+        game.Show();
+
+        function endTurn() {
+		    if(game.GetWinner() != -1) {
+				game = new Game;	
 			} else {
-				
-				let rangeDom = document.getElementById("move_inout_range");
-				let spanDom =  document.getElementById("move_inout_range_span");
-				let buttonDom =  document.getElementById("move_inout_range_button");
-				
-				moveDom.srcGrid = srcGrid;
-				moveDom.targetGrid = targetGrid;
-				moveDom.getElementById;
-				rangeDom.max = army.soldiers_;
-				rangeDom.value = army.soldiers_;
-				spanDom.innerText = army.soldiers_;
-				rangeDom.oninput = function(){spanDom.innerText = rangeDom.value;};
-				buttonDom.onclick = function(){moveDom.style.visibility = "hidden"; game.Move(srcGrid, grid, +rangeDom.value);game.Show();};
-				moveDom.style.visibility = "";
+				game.Pass();
 			}
-		} else if (phase == 2) {
-		    Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(txtElement => board.removeChild(txtElement));
-			game.Attack(srcGrid, grid);
-			game.Show();
-		}
-	  
-  	  }
-
-
-	  
-	  let armyOperables = 0;
-	  moveDom.style.visibility = "hidden";
-	  Array.from(board.children).filter(elmt => elmt.tagName == "text").forEach(txtElement => board.removeChild(txtElement));
-	  Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(txtElement => board.removeChild(txtElement));
-	  this.#status_.armies_.forEach(army => {
-	   let element = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-	   element.setAttributeNS(null, 'x', (army.grid_ % 8) + 0.5);
-	   element.setAttributeNS(null, 'y', (army.grid_ / 8 | 0) + 0.8);
-	   element.setAttributeNS(null, 'font-size', "0.05em");
-	   element.setAttributeNS(null, 'text-anchor', "middle");
-	   element.setAttributeNS(null, 'fill', army.player_ == 0 ? "red" : "blue");
-	   element.textContent =  army.soldiers_;
-	   let choices = game.Choices(army.grid_);
-	   if (!choices.move || !choices.move.find(grids => grids.length > 0) && choices.attack.length == 0) {
-	     element.style = "opacity:0.5";
-	   } else {
-	     ++armyOperables;
-	     element.onclick = function(){OnGridChoice(army.grid_, 0)};
-	   }
-	   board.appendChild(element);
-	  });
-	  
-	  roundDom.innerText = this.#status_.progress_.round_;
-	  playerDom.innerText = this.#status_.progress_.player_;
-	  armyOperableDom.innerText = armyOperables;
-  }
-}
-
-let game = new Game;
-game.Show();
-
-function endTurn() {
-   game.Pass();
-   game.Show();
-}
-
-
-
-
-</script>
+            game.Show();
+        }
+    </script>
 </body>
+
 </html>
