@@ -5,7 +5,7 @@
 
     <header  width=720>
     <div style="font-size:60px"> 英雄无敌棋</div>
-    <div style="font-size:48px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜！！！ </span></div>
+    <div style="font-size:40px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> 可操作部队: <span id=operableArmies>0</span> <span id=winner style="visibility:hidden"> 获胜！！！ </span></div>
 	</header>
     <svg id=board xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-0.1 -0.1 8.2 8.2">
         <circle r="99" fill="#222" />
@@ -17,9 +17,11 @@
 	<div><p/></div>
     <footer style="font-size:60px" width=720>
     <span id=move_inout style="visibility:hidden">
-        <input id=move_inout_range type="range" min="1" max="8" step="1" value="8" />
-        <span id=move_inout_range_span>8</span>
-        <button id=move_inout_range_button type="button" style="font-size:60px">确认移动</button>
+	    <div>
+        <input id=move_inout_range type="range" min="1" max="8" step="1" value="8" style="width:400px" />
+        <span id=move_inout_range_span>8</span> <button id=move_inout_range_button type="button" style="font-size:60px">确认移动</button>
+		</div>
+        
     </span><span> </span><button type="button"  onclick=endTurn() align=right style="font-size:60px">操作完毕</button>
     </footer>
 
