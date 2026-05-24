@@ -4,15 +4,28 @@
     <meta charset="utf-8">
     <title>Newton Go</title>
     <link rel="manifest" href="/heroesgo.appcache">
+    <script src="https://unpkg.com/netplayjs@0.4.1/dist/netplay.js"></script>
+    <script src="netplay-adapter.js"></script>
 </head>
 
 <body>
 
 
     <header  width=720>
-    <div style="font-size:60px"> 牛顿摆(内测)</div>
-    <div style="font-size:32px">回合<span id=round>0</span> 玩家:<span id=player>Red</span> <span id=winner style="visibility:hidden"> 获胜 </span><span  style="align:right" ><button type="button"  onclick=Drawback() align=right style="font-size:40px">回退</button><span> </span>
-	<button type="button"  onclick=Redo()  style="font-size:40px" >重做</button></span></div>
+    <div style="font-size:60px">牛顿摆(内测)</div>
+    <div style="font-size:32px">
+        回合<span id=round>0</span>
+        玩家:<span id=player>Red</span>
+        <span id=winner style="visibility:hidden">获胜</span>
+        <span id=opponent style="margin-left:10px;color:gray;display:none"></span>
+        <span style="align:right">
+            <button type="button" id=undoBtn onclick=Drawback() style="font-size:30px">回退</button>
+            <button type="button" id=redoBtn onclick=Redo() style="font-size:30px">重做</button>
+            <button type="button" id=onlineBtn onclick=startOnline() style="font-size:30px;background-color:#4CAF50;color:white;border:none;padding:2px 10px;border-radius:4px;cursor:pointer">联机对战</button>
+            <button type="button" id=exitBtn onclick=exitOnline() style="display:none;font-size:30px;background-color:#f44336;color:white;border:none;padding:2px 10px;border-radius:4px;cursor:pointer">退出房间</button>
+            <button type="button" id=rematchBtn onclick=requestRematch() style="display:none;font-size:30px;background-color:#2196F3;color:white;border:none;padding:2px 10px;border-radius:4px;cursor:pointer">再来一局</button>
+        </span>
+    </div>
 	</header>
     <svg id=board xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="-0.1 -0.1 8.2 8.2">
         <circle r="99" fill="#f0f0f0" />
@@ -39,7 +52,7 @@
             gameover: "Game over!",
             unknown: "not supported"
         })
-		
+
 		const BoardWidth = 8;
 
         class Instruction {
@@ -52,9 +65,11 @@
 				return [this.oper_type_, [this.direction_[0], this.direction_[1]], this.count_];
 			}
 			static FromNumber(num) {
+				if (num === 0) return new Instruction(OperType.pass, [0,0], 0);
 				return new Instruction(OperType.move, Directions[(num - 1)&0x3], ((num - 1) >> 2) + 1);
 			}
 			static ToNumber(s) {
+				if (s.oper_type_ == OperType.pass) return 0;
 				return Directions.findIndex(o => o[0] == s.direction_[0] && o[1] == s.direction_[1]) + 1
 					+ (s.count_ - 1) * 4;
 			}
@@ -77,57 +92,58 @@
                 this.redo_ = [];
 				this.players_ = [[0,0], [BoardWidth - 1, BoardWidth -1]];
 				this.obstacle_ = new Array(BoardWidth * BoardWidth).fill(0);
+                this.autoSkipped_ = false;
             }
         }
 
         class Game {
-            #status_ = new GameStatus;
             constructor() {
+				this._status_ = new GameStatus;
 				this.Reset();
             }
 			Redo() {
-			    if (this.#status_.redo_.length == 0) {
+			    if (this._status_.redo_.length == 0) {
 				  return;
 				}
-				let redo_tmp = this.#status_.redo_;
-				let hist_tmp = this.#status_.history_;
+				let redo_tmp = this._status_.redo_;
+				let hist_tmp = this._status_.history_;
 				hist_tmp.push(redo_tmp.pop());
 				this.Reset();
 				hist_tmp.forEach(inst => this.OnCmd(inst));
-				this.#status_.redo_ = redo_tmp;
+				this._status_.redo_ = redo_tmp;
 			}
 			Drawback() {
-			    if (this.#status_.history_.length == 0) {
+			    if (this._status_.history_.length == 0) {
 				  return;
 				}
-				let redo_tmp = this.#status_.redo_;
-				let hist_tmp = this.#status_.history_;
+				let redo_tmp = this._status_.redo_;
+				let hist_tmp = this._status_.history_;
 				redo_tmp.push(hist_tmp.pop());
 				this.Reset();
 				hist_tmp.forEach(inst => this.OnCmd(inst));
-				this.#status_.redo_ = redo_tmp;
+				this._status_.redo_ = redo_tmp;
 			}
 			Reset() {
-			    this.#status_ = new GameStatus;
+			    this._status_ = new GameStatus;
 			}
 			GetObstacle(cord) {
-				return this.#status_.obstacle_[cord[0] + cord[1] * BoardWidth];
+				return this._status_.obstacle_[cord[0] + cord[1] * BoardWidth];
 			}
 			ClearObstacle(cord) {
-				this.#status_.obstacle_[cord[0] + cord[1] * BoardWidth] = 0;
+				this._status_.obstacle_[cord[0] + cord[1] * BoardWidth] = 0;
 			}
 			SetObstacle(cord) {
-				this.#status_.obstacle_[cord[0] + cord[1] * BoardWidth] = 1;
+				this._status_.obstacle_[cord[0] + cord[1] * BoardWidth] = 1;
 			}
 			AllObstacle() {
-				return this.#status_.obstacle_.map((v,i) => v === 1 ? [i % BoardWidth, i / BoardWidth | 0] : null).filter(o => o !== null);
+				return this._status_.obstacle_.map((v,i) => v === 1 ? [i % BoardWidth, i / BoardWidth | 0] : null).filter(o => o !== null);
 			}
 			BoundCheck(cord) {
 				return cord.every(v => v >= 0 && v < BoardWidth);
 			}
 
 			IsIdle(cord) {
-				return this.#status_.players_.every(player => player[0] != cord[0] || player[1] != cord[1])
+				return this._status_.players_.every(player => player[0] != cord[0] || player[1] != cord[1])
 					&& this.GetObstacle(cord) == 0;
 			}
 			Advance(cord, offset) {
@@ -137,21 +153,21 @@
 				return cord1[0] == cord2[0] && cord1[1] == cord2[1];
 			}
 			HasEnemy(cord) {
-				return this.SamePos(cord, this.#status_.players_[1 - this.#status_.progress_.player_]);
+				return this.SamePos(cord, this._status_.players_[1 - this._status_.progress_.player_]);
 			}
 			MyPos(cord) {
-				return this.#status_.players_[this.#status_.progress_.player_];
+				return this._status_.players_[this._status_.progress_.player_];
 			}
 			Repeat(offset, num) {
 				return offset.map(v => v * num);
 			}
 			HappyEnd(pos) {
-				return this.#status_.progress_.player_ == 0 && pos[0] + 1 == BoardWidth && pos[1] + 1 == BoardWidth
-					|| this.#status_.progress_.player_ == 1 && pos[0] == 0 && pos[1] == 0;
-			}			
+				return this._status_.progress_.player_ == 0 && pos[0] + 1 == BoardWidth && pos[1] + 1 == BoardWidth
+					|| this._status_.progress_.player_ == 1 && pos[0] == 0 && pos[1] == 0;
+			}
             Reachable() {
                 let reachable = [];
-				let origPos = this.#status_.players_[this.#status_.progress_.player_];
+				let origPos = this._status_.players_[this._status_.progress_.player_];
 				Directions.forEach(direction => {
 				  for(let count = 1; count <= 2; ++count) {
 				    let newPos = [origPos[0] + direction[0] * count, origPos[1] + direction[1] * count];
@@ -164,47 +180,48 @@
                 return reachable;
             }
 			AllPlayer() {
-				return this.#status_.players_.map((cord, i) => new Object({x:cord[0], y: cord[1], id:i}));
+				return this._status_.players_.map((cord, i) => new Object({x:cord[0], y: cord[1], id:i}));
 			}
 			CurrPlayer() {
-				return this.#status_.progress_.player_;
+				return this._status_.progress_.player_;
 			}
 
             Choices() {
-                if (this.#status_.winner_ != -1) {
+                if (this._status_.winner_ != -1) {
                     return []
                 }
                 return this.Reachable();
             }
             Pass() {
-			    if (this.#status_.winner_ != -1) {
+			    if (this._status_.winner_ != -1) {
                     return InstResult.gameover;
                 }
-                this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
-                this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_);
+                this._status_.progress_.player_ = 1 - this._status_.progress_.player_;
+                this._status_.progress_.round_ += (0 == this._status_.progress_.player_);
 				if (0 == this.Choices().length){
-					this.#status_.progress_.player_ = 1 - this.#status_.progress_.player_;
-					this.#status_.progress_.round_ += (0 == this.#status_.progress_.player_);				
+					this._status_.autoSkipped_ = true;
+					this._status_.progress_.player_ = 1 - this._status_.progress_.player_;
+					this._status_.progress_.round_ += (0 == this._status_.progress_.player_);
 				}
                 return InstResult.ok;
-            }			
+            }
             Move(direction, num) {
-                if (this.#status_.winner_ != -1) {
+                if (this._status_.winner_ != -1) {
                     return InstResult.gameover;
                 }
 				if (num < 1 || num > 2
 					|| -1 == Directions.findIndex(o => o[0] == direction[0] && o[1] == direction[1])) {
 					return InstResult.invalid;
 				}
-				let origPos = this.#status_.players_[this.#status_.progress_.player_];
+				let origPos = this._status_.players_[this._status_.progress_.player_];
 				let newPos = this.Advance(origPos, this.Repeat(direction, num));
 				if (!this.BoundCheck(newPos) || !this.IsIdle(newPos) ||
 					num == 2 && !this.IsIdle(this.Advance(origPos,direction))) {
 					return InstResult.invalid;
 				}
-				this.#status_.players_[this.#status_.progress_.player_] = newPos;
+				this._status_.players_[this._status_.progress_.player_] = newPos;
 				if (this.HappyEnd(newPos)) {
-                        this.#status_.winner_ = this.#status_.progress_.player_;
+                        this._status_.winner_ = this._status_.progress_.player_;
                         return InstResult.ok;
 				}
 				let futurePos = this.Advance(newPos, direction);
@@ -241,101 +258,176 @@
 				let ret = InstResult.unknown;
                 if (inst.oper_type_ == OperType.move) {
                     ret = this.Move(inst.direction_, inst.count_);
-                } else if (inst.oper_type_ == OperType.pass) {
-                    ret = this.Pass();
                 }
 				if (ret == InstResult.ok) {
-					this.#status_.redo_ = [];
-					this.#status_.history_.push(inst);
+					this._status_.redo_ = [];
+					this._status_.history_.push(inst);
+					if (this._status_.autoSkipped_) {
+						this._status_.history_.push(new Instruction(OperType.pass, [0,0], 0));
+						this._status_.autoSkipped_ = false;
+					}
 				}
-                return InstResult.unknown;
+                return ret;
             }
 
             GetWinner() {
-                return this.#status_.winner_;
+                return this._status_.winner_;
             }
             CurrProgress() {
-                return this.#status_.progress_;
+                return this._status_.progress_;
             }
+			Status() { return this._status_; }
+
+			serialize() {
+				let s = this._status_;
+				return {
+					players_: [s.players_[0].slice(), s.players_[1].slice()],
+					obstacle_: s.obstacle_.slice(),
+					winner_: s.winner_,
+					progress_: { round_: s.progress_.round_, player_: s.progress_.player_ },
+					history_: s.history_.map(inst => Instruction.ToNumber(inst))
+				};
+			}
+			deserialize(value) {
+				let s = this._status_;
+				s.winner_ = value.winner_;
+				s.progress_.round_ = value.progress_.round_;
+				s.progress_.player_ = value.progress_.player_;
+				s.players_ = value.players_.map(p => p.slice());
+				s.obstacle_ = value.obstacle_.slice();
+				s.history_ = value.history_.map(n => Instruction.FromNumber(n));
+				s.redo_ = [];
+			}
             Show() {
-                let board = document.getElementById("board");
-                let roundDom = document.getElementById("round");
-                let playerDom = document.getElementById("player");
-                let winnerDom = document.getElementById("winner");
-
-                let srcGrid = -1;
-                let targetGrid = -1;
-                let num = -1;
-
-                const game = this;
-				Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
-				game.AllPlayer().forEach(player => {
-					let element = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-					element.setAttributeNS(null, 'cx', player.x + 0.5);
-					element.setAttributeNS(null, 'cy', player.y + 0.5);
-					element.setAttributeNS(null, 'r', 0.5);
-					element.setAttributeNS(null, 'fill', player.id == 0 ? "red" : "blue");
-					element.style = "opacity:0.4";
-					element.class_ = "mask";
-					board.appendChild(element);
-				});
+				renderBoard(this);
+            }
+			ShowChoices() {
+				let board = document.getElementById("board");
+				const game = this;
 				game.Choices().forEach(offset => {
 					let direction = offset[0];
 					let num = offset[1];
 					let pos = game.Advance(game.MyPos(), game.Repeat(direction, num));
-					let element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-					element.setAttributeNS(null, 'x', pos[0]);
-					element.setAttributeNS(null, 'y', pos[1]);
-					element.setAttributeNS(null, 'width', 1);
-					element.setAttributeNS(null, 'height', 1);
-					element.setAttributeNS(null, 'fill', game.CurrPlayer() == 0 ? "red" : "blue");
-					element.style = "opacity:0.3";
-					element.class_ = "mask";
-					element.grid_ = pos;
-					element.onclick = function() {
-						game.OnCmd(new Instruction(OperType.move, direction, num));
-						game.Show();
-					};
-					board.appendChild(element);
+					let el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+					el.setAttribute('x', pos[0]);
+					el.setAttribute('y', pos[1]);
+					el.setAttribute('width', 1);
+					el.setAttribute('height', 1);
+					el.setAttribute('fill', game.CurrPlayer() == 0 ? "red" : "blue");
+					el.setAttribute('stroke-width', 0);
+					el.setAttribute('style', 'opacity:0.3;pointer-events:all');
+					el.class_ = "mask";
+					el.addEventListener('click', function() {
+						if (isOnline && netplayInstance) {
+							netplayInstance.sendMove(direction, num);
+						} else if (!isOnline) {
+							game.OnCmd(new Instruction(OperType.move, direction, num));
+							game.Show();
+						}
+					});
+					board.appendChild(el);
 				});
-
-				game.AllObstacle().forEach(cord => {
-					let x = cord[0]
-					let y = cord[1]
-					let element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-					element.setAttributeNS(null, 'x', x);
-					element.setAttributeNS(null, 'y', y);
-					element.setAttributeNS(null, 'width', 1);
-					element.setAttributeNS(null, 'height', 1);
-					element.setAttributeNS(null, 'fill', "yellow");
-					element.style = "opacity:0.2";
-					element.class_ = "mask";
-					board.appendChild(element);
-				});				
-
-                roundDom.innerText = this.#status_.progress_.round_;
-                playerDom.innerText = this.#status_.progress_.player_ == 0 ? "Red" : "Blue";
-                playerDom.style.color = this.#status_.progress_.player_ == 0 ? "red" : "blue";
-				winnerDom.style.visibility = this.#status_.winner_ != -1 ? "" : "hidden";
-				location.href = '#' + this.#status_.history_.map(Instruction.ToNumber).join('')
-            }
+			}
         }
+
+		function renderBoard(game) {
+			let board = document.getElementById("board");
+			let roundDom = document.getElementById("round");
+			let playerDom = document.getElementById("player");
+			let winnerDom = document.getElementById("winner");
+			let opponentDom = document.getElementById("opponent");
+
+			Array.from(board.children).filter(elmt => elmt.class_ == "mask").forEach(maskElement => board.removeChild(maskElement));
+			game.AllPlayer().forEach(player => {
+				let element = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+				element.setAttribute('cx', player.x + 0.5);
+				element.setAttribute('cy', player.y + 0.5);
+				element.setAttribute('r', 0.5);
+				element.setAttribute('fill', player.id == 0 ? "red" : "blue");
+				element.style = "opacity:0.4";
+				element.class_ = "mask";
+				board.appendChild(element);
+			});
+
+			if (isOnline) {
+				let localId = (netplayInstance && netplayInstance.localPlayerId != null) ? netplayInstance.localPlayerId : -1;
+				if (game.CurrPlayer() == localId) {
+					game.ShowChoices();
+				}
+			} else {
+				game.ShowChoices();
+			}
+
+			game.AllObstacle().forEach(cord => {
+				let x = cord[0], y = cord[1];
+				let element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+				element.setAttribute('x', x);
+				element.setAttribute('y', y);
+				element.setAttribute('width', 1);
+				element.setAttribute('height', 1);
+				element.setAttribute('fill', "yellow");
+				element.setAttribute('stroke-width', 0);
+				element.style = "opacity:0.2";
+				element.class_ = "mask";
+				board.appendChild(element);
+			});
+
+			let s = game._status_;
+			roundDom.innerText = s.progress_.round_;
+			playerDom.innerText = s.progress_.player_ == 0 ? "Red" : "Blue";
+			playerDom.style.color = s.progress_.player_ == 0 ? "red" : "blue";
+			winnerDom.style.visibility = s.winner_ != -1 ? "" : "hidden";
+
+			if (isOnline && netplayInstance) {
+				let localId = netplayInstance.localPlayerId;
+				let myName = localId == 0 ? "Red" : "Blue";
+				let opName = localId == 0 ? "Blue" : "Red";
+				opponentDom.style.display = "";
+				if (s.winner_ != -1) {
+					opponentDom.innerText = s.winner_ == localId ? "你赢了!" : opName + " 赢了!";
+					opponentDom.style.color = s.winner_ == localId ? "green" : "red";
+					document.getElementById('rematchBtn').style.display = '';
+				} else if (s.progress_.player_ == localId) {
+					opponentDom.innerText = "你的回合 (" + myName + ")";
+					opponentDom.style.color = localId == 0 ? "red" : "blue";
+				} else {
+					opponentDom.innerText = "等待 " + opName + " 操作...";
+					opponentDom.style.color = "gray";
+				}
+			}
+
+			if (!isOnline) {
+				location.href = '#' + s.history_.map(Instruction.ToNumber).join('');
+			}
+		}
 
         var game = new Game;
 
 		function Drawback() {
-			game.Drawback();	
+			if (isOnline) {
+				if (netplayInstance) netplayInstance.requestUndo();
+				return;
+			}
+			game.Drawback();
             game.Show();
         }
 		function Redo() {
-			game.Redo();	
+			if (isOnline) return;
+			game.Redo();
             game.Show();
         }
+
 		window.onload = (event) =>{
-			if(location.hash.length > 1) {
-				location.hash.substr(1).split('').map(c => parseInt(c))
-					.map(Instruction.FromNumber)
-					.forEach(inst => game.OnCmd(inst));
+			let hash = location.hash.substr(1);
+			if (!isOnline && hash.length > 0) {
+				if (/^\d+$/.test(hash)) {
+					hash.split('').map(c => parseInt(c))
+						.map(Instruction.FromNumber)
+						.forEach(inst => game.OnCmd(inst));
+				} else if (hash.startsWith('room=') || hash.startsWith('server=')) {
+					startOnline();
+					return;
+				}
 			}
 			game.Show();
 		};
